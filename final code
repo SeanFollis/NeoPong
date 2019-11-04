@@ -1,0 +1,362 @@
+
+#include <NeoPixelBus.h>
+
+const uint16_t PixelCount = 144;
+
+const uint8_t DotClockPin = 13;
+const uint8_t DotDataPin = 11;
+
+NeoPixelBus<DotStarBgrFeature, DotStarSpiMethod> strip(PixelCount);
+RgbColor red(30, 0, 0);
+RgbColor yellow(165, 145, 0);
+RgbColor blue(0, 50, 38);
+RgbColor white(255);
+RgbColor black(0);
+RgbColor purple (225, 0, 175);
+#define RIGHT               0
+#define LEFT                1
+#define START               2
+#define RESTART             3
+#define STOP                4
+#define POINT               5
+#define POSTART             0
+#define POSEND              143
+#define SAFEZONE            14
+#define LEFTZONE            yellow
+#define RIGHTZONE           blue
+#define PIXELCOLOR          white
+#define SCOREPIXELCOLOR     red
+#define LEFTBUTTON          5
+#define RIGHTBUTTON         6
+#define RIGHTPOINT          0
+#define LEFTPOINT           1
+#define RIGHTWIN            1
+#define LEFTWIN             0
+#define MAXFS               5   //Maximum Final Score
+
+int last_point;
+int game_state = START;
+int pixel = 72;
+int x = 100;
+int speedPixel = 10000;
+int countR = 0;
+int countL = 0;
+int z = 143;
+int y = 0;
+int t = 0;
+int v = 20;
+int q = 165;
+int o = 8;
+int p = 145;
+int last;
+long randside;
+
+void setup() {
+  pinMode(RIGHTBUTTON, INPUT);
+  // digitalWrite(RIGHTBUTTON, HIGH);
+  pinMode(LEFTBUTTON, INPUT);
+  // digitalWrite(LEFTBUTTON, HIGH);
+  Serial.begin(9600);
+  randomSeed(analogRead(0));
+
+  strip.Begin();
+  strip.ClearTo(black);
+  strip.Show();
+
+}
+void beepboop() {
+  for (int s = 500; s < 6000; s += 1) {
+    tone(2, s);
+    delayMicroseconds(30);
+    tone(2, s += 10);
+    delayMicroseconds(10);
+
+  }
+  noTone(2);
+
+}
+void blinkstage() {
+  strip.SetPixelColor(pixel, PIXELCOLOR);
+  strip.Show();
+  delay(100);
+  strip.SetPixelColor(pixel, black);
+  strip.Show();
+  delay(100);
+}
+void wintone(int dir) {
+
+  //This is the tone used when a player wins the game
+  for (int x = 0; x < 10; x++) {
+    for (int last = 2200; last > 300; last -= 100); {
+      for (int b = 450; b > 345; b -= 5) {
+        tone(2, b, last);
+        delay(10);
+      }
+    }
+    tone(2, 2340, 200);
+    delay(10);
+    noTone(2);
+
+    //This is the light show for the right winner
+    if (dir == RIGHTWIN) {
+
+      for (int z = 143; z > POSTART; z--) {
+
+        if ((v > 170)) { //limit the fade so it stays in it kind of zone or region of color
+          v = 170;
+        }
+
+        RgbColor blue(0, v , o);
+        strip.SetPixelColor(z, white );
+        strip.Show();
+        delayMicroseconds(2000);
+        strip.SetPixelColor(z + 4, RIGHTZONE);
+        delayMicroseconds(10);
+        strip.SetPixelColor(z + 25 , black);
+        delayMicroseconds(10);
+
+      }
+      //makes a fading effect for the missle strike winner feature while technically changing the brightness at the same time
+      v += 15;
+      strip.ClearTo(black);
+      strip.Show();
+
+
+
+    }
+
+    //This is the light show for the left winner
+    else {
+      for (int t = 0; t < POSEND; t++) {
+        if (q < 15) { //limit the fade so it stays in it kind of zone or region of color
+          q = 15;
+        }
+        RgbColor yellow(q , p, 0);
+        strip.SetPixelColor(t, white );
+        strip.Show();
+        delayMicroseconds(2000);
+        strip.SetPixelColor(t - 4, LEFTZONE);
+        delayMicroseconds(10);
+        strip.SetPixelColor(t - 25, black);
+        delayMicroseconds(10);
+
+      }
+      //makes a fading effect for the missle strike winner feature while technically changing the brightness at the same time
+      q -= 15;
+      strip.ClearTo(black);
+      strip.Show();
+
+    }
+  }
+}
+
+
+void loop() {
+
+  //Resets color for leftzone
+  for (int y = POSTART ; y < SAFEZONE; y++) {
+    strip.SetPixelColor( y, LEFTZONE);
+  }
+
+  //Resets color for rightzone
+  for (int y = POSEND ; y > POSEND - 14; y--) {
+    strip.SetPixelColor(  y, RIGHTZONE);
+  }
+
+  //Sets score color for rightzone
+  for (int y = 0; y < countR; y++) {
+    strip.SetPixelColor(y, SCOREPIXELCOLOR);
+  }
+
+  //Sets score color for leftzone
+  for (int y = 0; y < countL; y++) {
+    strip.SetPixelColor(POSEND - y, SCOREPIXELCOLOR);
+  }
+
+  //Moves between game states
+  switch (game_state) {
+
+    case START:
+      //Sets initial position of game-pixel and blinks
+      blinkstage();
+
+      //The game starts when one person hits a button
+      if ((digitalRead(LEFTBUTTON) == HIGH) || (digitalRead(RIGHTBUTTON) == HIGH)  ) {
+
+
+        if (random(2))
+          game_state = LEFT;
+        else
+          game_state = RIGHT;
+
+        // The game starts, then the game-pixel is heading to one direction
+        if (digitalRead(LEFTBUTTON) == HIGH)
+          game_state = RIGHT;
+
+        if (digitalRead(RIGHTBUTTON) == HIGH)
+          game_state = LEFT;
+
+      }
+
+      break;
+
+    case RESTART:
+      // The pixel is now blinking after restarting from the Point State
+      blinkstage();
+      // When one side loses the game-pixel is served from the losing side (if Left loses, then the game-pixel is served to the right)
+      if (last_point == LEFTPOINT) {
+        pixel = 0;
+        game_state = RIGHT;
+      }
+      // When one side loses the game-pixel is served from the losing side (if Right loses, then the game-pixel is served to the left)
+      if (last_point == RIGHTPOINT) {
+        pixel = 142;
+        game_state = LEFT;
+      }
+      break;
+
+    case LEFT:
+      // if lost point outside of zone
+      if (pixel-- < 0)  {
+
+        countR += 2;
+        last_point = LEFTPOINT ;
+        game_state = POINT;
+      }
+
+      //game-pixel blinks and speeds up when hit on the right zone
+      strip.SetPixelColor(pixel, PIXELCOLOR );
+      strip.Show();
+      delayMicroseconds(speedPixel);
+      strip.SetPixelColor(pixel, black);
+
+
+      // When the right button is pressed, the piezo speaker produces a tone
+      if (digitalRead(LEFTBUTTON) == HIGH) {
+
+        beepboop();
+
+        speedPixel -= 200;     //Increase/decrease speed (by how much the microseconds decrease)
+
+        if (speedPixel < 1) speedPixel = 1;  //Limit lowest speed to one
+        //Serial.println(pixel);
+
+        //Check if button pressed in safe zone
+        if (( pixel < SAFEZONE) && ( pixel > 1)) {
+          game_state = RIGHT;
+        }
+        //If the button is not pressed in the safe zone then it counts a right lose & goes to the POINT case
+        else {
+          countR += 2;
+          last_point = LEFTPOINT ;
+          game_state = POINT;
+        }
+      }
+
+      break;
+    case RIGHT:
+      //When serving it checks wheter game-pixel is greater than 143 if so it counts one lose to the right side
+      if (pixel++ > POSEND) {
+
+        countL += 2;
+        last_point = RIGHTPOINT;
+
+
+        game_state = POINT;
+      }
+      //game-pixel blinks and speeds up when hit on the right zone
+      strip.SetPixelColor(pixel, PIXELCOLOR);
+      strip.Show();
+      delayMicroseconds(speedPixel);
+      strip.SetPixelColor(pixel, black);
+      // When the right button is pressed, the piezo speaker produces a tone
+      if (digitalRead(RIGHTBUTTON) == HIGH) {
+
+        beepboop();
+
+        speedPixel -= 200;//Increase/decrease speed (by how much the microseconds decrease)
+
+        if (speedPixel < 1) speedPixel = 1;//Limits lowest speed to one
+
+        // add a define variable here to make the zones change easier
+        if (( pixel > 129) && (pixel < POSEND)) {
+          game_state = LEFT;
+        }
+        //If the button is not pressed in the safe zone then it counts a left lose & goes to the POINT case
+        else {
+          countL += 2;
+          last_point = RIGHTPOINT;
+
+
+          game_state = POINT;
+        }
+      }
+
+      break;
+    case POINT:
+      //Reads the Right score value and if it is greater than 4 it does the winner feature
+      if (countR > 13 ) {
+        for (int x = 0; x < 20; x++) {
+          strip.ClearTo(RIGHTZONE);
+          strip.Show();
+          delay(100);
+          strip.ClearTo(black);
+          strip.Show();
+          delay(100);
+
+        }
+
+        wintone(RIGHTWIN);
+        game_state = STOP;
+      }
+      //Reads the Left score value and if it is greater than 4 it does the winner feature
+      if (countL > 13) {
+        for (int x = 0; x < 20; x++) {
+          strip.ClearTo(LEFTZONE);
+          strip.Show();
+          delay(100);
+          strip.ClearTo(black);
+          strip.Show();
+          delay(100);
+
+        }
+
+        wintone(LEFTWIN);
+        game_state = STOP;
+      }
+
+      // MAXFS is the maximum final score before the total restart
+      {
+        if ((countL < 13) && (countR < 13)) {
+          strip.SetPixelColor(pixel, PIXELCOLOR);
+          strip.Show();
+          delay(100);
+          strip.SetPixelColor(pixel, black);
+          strip.Show();
+          delay(100);
+
+          game_state = RESTART;
+        }
+
+      }
+
+      break;
+    //Total reset
+    case STOP:
+      q = 165;
+      v = 20;
+      z = 143;
+      t = 0;
+      speedPixel = 10000;
+      y = 0;
+      pixel = 72;
+      countR = 0;
+      countL = 0;
+      last_point = 0;
+      game_state = START;
+
+      break;
+  }
+}
+
+
